@@ -1,0 +1,72 @@
+# Qiskit - IBM Quantum Computing Framework
+# Used for: Circuit design, state vector simulation, measurement simulation
+qiskit==1.1.0
+qiskit-aer==0.14.1
+qiskit-ibm-runtime==0.21.0
+
+# QuTiP - Quantum Toolbox in Python
+# Used for: Quantum optics, entanglement analysis, system properties
+qutip==4.7.3
+
+# TIER 2: SCIENTIFIC COMPUTING (HIGHLY RECOMMENDED)
+# ============================================================================
+
+# NumPy - Numerical computing
+# Used for: Matrix operations, array manipulation, linear algebra
+numpy==1.24.3
+
+# SciPy - Scientific computing
+# Used for: Advanced numerical operations, optimization, signal processing
+scipy==1.11.4
+
+# SymPy - Symbolic mathematics
+# Used for: Symbolic computation, algebraic manipulation
+sympy==1.12
+
+# Pandas - Data manipulation and analysis
+# Used for: Organizing measurement results, data frames, statistical analysis
+pandas==2.1.1
+
+# TIER 3: VISUALIZATION (RECOMMENDED)
+# ============================================================================
+
+# Matplotlib - Plotting library
+# Used for: Creating graphs, histograms, circuit diagrams
+matplotlib==3.8.2
+
+# Seaborn - Statistical visualization
+# Used for: Enhanced plots, heatmaps, statistical graphics
+seaborn==0.13.0
+
+# Plotly - Interactive plotting
+# Used for: Interactive 3D plots, web-based visualizations
+plotly==5.17.0
+
+# TIER 4: INTERACTIVE NOTEBOOKS (OPTIONAL BUT USEFUL)
+# ============================================================================
+
+# Jupyter - Interactive notebook environment
+# Used for: Running interactive quantum computing experiments
+jupyter==1.0.0
+jupyterlab==4.0.9
+notebook==7.0.6
+ipython==8.17.2
+
+# TIER 5: ADDITIONAL QUANTUM LIBRARIES (OPTIONAL)
+# ============================================================================
+
+# Cirq - Google Quantum Framework (for comparison/compatibility)
+# Used for: Alternative circuit design, Google quantum processors
+cirq==1.3.0
+
+# PennyLane - Quantum Machine Learning (for ML applications)
+# Used for: Hybrid quantum-classical algorithms, ML on quantum computers
+pennylane==0.33.1
+
+# PyQuil - Rigetti Quantum Framework (for Rigetti compatibility)
+# Used for: Rigetti quantum processors
+pyquil==4.2.0
+
+# MQT Qudits - Munich Quantum Toolkit for Qudit Computing
+# Used for: Qudit quantum circuits, photon number basis, M-mode Bell states
+mqt-qudits
