@@ -1,11 +1,5 @@
 import modal
-import cupy as cp
-import numpy as np
-import itertools
-import time
-from scipy.linalg import expm
-from pathlib import Path
-import json
+
 
 app = modal.App("quantum-illumination")  # NOT Stub
 
@@ -26,7 +20,15 @@ timeout=1500,
 cpu= 1,
 volumes={"/vol/qi": modal.Volume.from_name("qi-results", create_if_missing=True)}
 )
-def run_full_pipeline(M: int, Kappa: float, Nbar: float, Nmax: int, K_samples: int):
+def run_full_pipeline(M: int, Kappa: float, Nbar: float, Nmax: int, K_samples: int,exact: bool = False)-> dict:
+    import cupy as cp
+    import numpy as np
+    import itertools
+    import time
+    from scipy.linalg import expm
+    from pathlib import Path
+    import json
+    from typing import Dict, List, Tuple 
 
 
     def bose_einstein_pmf(n: int, nbar: float) -> float:
@@ -245,8 +247,9 @@ def run_full_pipeline(M: int, Kappa: float, Nbar: float, Nmax: int, K_samples: i
        # -----------------------------------------------------------------
     # GPU basis generation
     # -----------------------------------------------------------------
-    start= time.time()
     d = Nmax + 1
+
+    # ---------- Basis generation on GPU (unchanged) ----------
     all_n_cpu = np.array(list(itertools.product(range(d), repeat=M)))
     all_n_gpu = cp.asarray(all_n_cpu)
     sum_n = cp.sum(all_n_gpu, axis=1)
@@ -269,9 +272,7 @@ def run_full_pipeline(M: int, Kappa: float, Nbar: float, Nmax: int, K_samples: i
         basis_by_Nc[Nc]['k'] = cp.concatenate(basis_by_Nc[Nc]['k'])
         basis_by_Nc[Nc]['n'] = cp.concatenate(basis_by_Nc[Nc]['n'])
 
-    # -----------------------------------------------------------------
-    # Monte Carlo
-    # -----------------------------------------------------------------
+    # ---------- Block accumulators (GPU) ----------
     blocks = {Nc: cp.zeros((len(data['k']), len(data['k'])), dtype=cp.complex128)
               for Nc, data in basis_by_Nc.items()}
 
@@ -288,71 +289,113 @@ def run_full_pipeline(M: int, Kappa: float, Nbar: float, Nmax: int, K_samples: i
         Q_ket = (j_idx.reshape(1,1,M) == k_ket).astype(cp.int8)
         broadcast_indices[Nc] = (Q_prime, Q_ket, n_prime, n_ket)
 
-    for sample in range(K_samples):
-        n_vec = sample_environment(M, Nbar, Nmax)
-        v0_list, v1_list = local_bs_data(n_vec, Kappa, Nmax)
-        S_cpu = np.zeros((M, 2, 2, d, d), dtype=complex)
-        for j in range(M):
-            sigmas = compute_mode_sigmas(v0_list[j], v1_list[j], d)
-            S_cpu[j,0,0] = sigmas[(0,0)]
-            S_cpu[j,1,1] = sigmas[(1,1)]
-            S_cpu[j,0,1] = sigmas[(0,1)]
-            S_cpu[j,1,0] = sigmas[(1,0)]
-        S = cp.asarray(S_cpu)
+    start = time.time()
 
-        for Nc, (Q_prime, Q_ket, n_prime, n_ket) in broadcast_indices.items():
-            extracted_vals = S[j_idx, Q_prime, Q_ket, n_prime, n_ket]
-            block_vals = cp.prod(extracted_vals, axis=-1)
-            blocks[Nc] += block_vals / M
+    # ============================
+    #  EXACT OR MONTE CARLO BRANCH
+    # ============================
+    if exact:
+        # ----- Exact summation over all environment configurations -----
+        probs = thermal_distribution(Nbar, Nmax)           # length d, normalised
+        all_env_tuples = list(itertools.product(range(d), repeat=M))
+        env_probs = [np.prod([probs[n] for n in vec]) for vec in all_env_tuples]
 
-    # Normalisation
-    total_trace = 0.0
-    for Nc in blocks:
-        blocks[Nc] /= K_samples
-        total_trace += cp.real(cp.trace(blocks[Nc]))
-    for Nc in blocks:
-        blocks[Nc] /= total_trace
+        for n_vec, p in zip(all_env_tuples, env_probs):
+            v0_list, v1_list = local_bs_data(np.array(n_vec), Kappa, Nmax)
+            S_cpu = np.zeros((M, 2, 2, d, d), dtype=complex)
+            for j in range(M):
+                sigmas = compute_mode_sigmas(v0_list[j], v1_list[j], d)
+                S_cpu[j,0,0] = sigmas[(0,0)]
+                S_cpu[j,1,1] = sigmas[(1,1)]
+                S_cpu[j,0,1] = sigmas[(0,1)]
+                S_cpu[j,1,0] = sigmas[(1,0)]
+            S = cp.asarray(S_cpu)
 
-    # Return as numpy dict
-    run_dir = Path("/vol/qi") / f"M={M}_K={K_samples}_Nbar={Nbar}_Nmax={Nmax}"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    result = {int(Nc): cp.asnumpy(blocks[Nc]) for Nc in blocks}
+            for Nc, (Q_prime, Q_ket, n_prime, n_ket) in broadcast_indices.items():
+                extracted_vals = S[j_idx, Q_prime, Q_ket, n_prime, n_ket]
+                block_vals = cp.prod(extracted_vals, axis=-1)
+                blocks[Nc] += p * block_vals / M
+
+        # Normalisation (should be ≈1 already, but we enforce)
+        total_trace = 0.0
+        for Nc in blocks:
+            total_trace += cp.real(cp.trace(blocks[Nc]))
+        for Nc in blocks:
+            blocks[Nc] /= total_trace
+
+    else:
+        # ----- Original Monte‑Carlo loop -----
+        for sample in range(K_samples):
+            n_vec = sample_environment(M, Nbar, Nmax)
+            v0_list, v1_list = local_bs_data(n_vec, Kappa, Nmax)
+            S_cpu = np.zeros((M, 2, 2, d, d), dtype=complex)
+            for j in range(M):
+                sigmas = compute_mode_sigmas(v0_list[j], v1_list[j], d)
+                S_cpu[j,0,0] = sigmas[(0,0)]
+                S_cpu[j,1,1] = sigmas[(1,1)]
+                S_cpu[j,0,1] = sigmas[(0,1)]
+                S_cpu[j,1,0] = sigmas[(1,0)]
+            S = cp.asarray(S_cpu)
+
+            for Nc, (Q_prime, Q_ket, n_prime, n_ket) in broadcast_indices.items():
+                extracted_vals = S[j_idx, Q_prime, Q_ket, n_prime, n_ket]
+                block_vals = cp.prod(extracted_vals, axis=-1)
+                blocks[Nc] += block_vals / M
+
+        # Normalisation after averaging
+        total_trace = 0.0
+        for Nc in blocks:
+            blocks[Nc] /= K_samples
+            total_trace += cp.real(cp.trace(blocks[Nc]))
+        for Nc in blocks:
+            blocks[Nc] /= total_trace
+
     end = time.time()
-    print(f"Time taken: {end - start} seconds")
+    print(f"Time taken: {end - start:.2f} seconds")
+
+    # ---------- Save results ----------
+    run_dir = Path("/vol/qi")
+    if exact:
+        run_dir = run_dir / f"M={M}_K=exact_Nbar={Nbar}_Nmax={Nmax}"
+    else:
+        run_dir = run_dir / f"M={M}_K={K_samples}_Nbar={Nbar}_Nmax={Nmax}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    result = {int(Nc): cp.asnumpy(blocks[Nc]) for Nc in blocks}
     np.savez_compressed(run_dir / "blocks.npz", **{f"Nc_{Nc}": mat for Nc, mat in blocks.items()})
-    
+
+    # Metadata
     metadata = {
         "parameters": {
             "M": M,
             "Kappa": Kappa,
             "Nbar": Nbar,
             "Nmax": Nmax,
-            "K_samples": K_samples,
+            "K_samples": K_samples if not exact else "exact",
+            "exact": exact,
             "time": end - start,
         },
         "blocks": {
             int(Nc): {
                 "shape": list(mat.shape),
-                "trace_real": float(np.trace(mat).real),
-                "trace_imag": float(np.trace(mat).imag)
+                "trace_real": float(cp.real(cp.trace(mat))),
             }
             for Nc, mat in blocks.items()
         },
     }
     with open(run_dir / "metadata.json", "w") as f:
-            json.dump(metadata, f, indent=2)
-            
-    print(f"Saved results to {run_dir}")
+        json.dump(metadata, f, indent=2)
 
+    print(f"Saved blocks to {run_dir}")
     return metadata
 
 
     
 
 @app.local_entrypoint()
-def main(m: int = 7, kappa: float = 0.05, nbar: float = 0.5, nmax: int = 2, k_samples: int = 1000):
+def main(m: int = 2, kappa: float = 0.05, nbar: float = 0.5, nmax: int = 2, k_samples: int = 1000):
     print(f"Running with M={m}, Kappa={kappa}, Nbar={nbar}, Nmax={nmax}, K_samples={k_samples}")
-    metadata = run_full_pipeline.remote(m, kappa, nbar, nmax, k_samples)
+    metadata = run_full_pipeline.remote(m, kappa, nbar, nmax, k_samples,exact=True)
     print("metadata: ", metadata)
 
 
