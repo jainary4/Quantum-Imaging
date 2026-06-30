@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import modal
 
-M= [2,3,4,5,6,7]
+M= [2,3,4,5,6]
 Nmax=2
 VOLUME_NAME = "qi-results"
 P_FA=[]
@@ -27,9 +27,12 @@ for m in M:
     P_FA.append(exact['P_FA'])
     P_MD.append(exact['P_MD'])
     P_e.append(exact['P_e'])
+    print(f"P_FA = {exact['P_FA']:.6f}")
+    print(f"P_MD = {exact['P_MD']:.6f}")
+    print(f"P_e = {exact['P_e']:.6f}")
 
 
-fig, (ax1, ax2,ax3) = plt.subplots(1, 3, figsize=(16, 6))
+"""fig, (ax1, ax2,ax3) = plt.subplots(1, 3, figsize=(16, 6))
 
 ax1.plot(M, P_FA, marker='o', color='green', linewidth=2)
 ax1.set_title(f'M vs Probability of False Alarm graph ')
@@ -58,5 +61,5 @@ ax3.legend()
 
 plt.tight_layout()
 plt.savefig('scaling_analysis_POVM.png', dpi=300)
-plt.show()
+plt.show()"""
 
