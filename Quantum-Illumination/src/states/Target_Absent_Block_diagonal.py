@@ -3,6 +3,8 @@ from typing import Dict, List, Tuple
 import modal
 import tempfile 
 from pathlib import Path
+
+
 VOLUME_NAME = "qi-results"
 
 
@@ -139,7 +141,7 @@ def generate_target_absent_blocks(
 # Example usage (if run as a script)
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
-    M = 7
+    M = 9
     Nmax = 2
     Nbar = 0.5
 
