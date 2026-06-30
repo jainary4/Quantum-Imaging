@@ -7,8 +7,8 @@ volume = modal.Volume.from_name("qi-results")
 def delete():
     import os
     files = [
-        "/vol/Global_lookuptable/M=7_Nmax=2/lookup_sigma.json",
-        "/vol/Global_lookuptable/M=7_Nmax=2/lookup_sigma.pkl",
+       "/vol/Global_lookuptable/M=6_Nmax=2/lookup.json",
+       "/vol/Global_lookuptable/M=5_Nmax=2/lookup.pkl",
     ]
     for f in files:
         try:
