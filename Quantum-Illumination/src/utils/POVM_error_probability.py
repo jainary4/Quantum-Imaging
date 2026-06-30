@@ -106,12 +106,12 @@ def compute_error_probability(lookup: Dict[int, Dict[Tuple[int, ...], Tuple[floa
 
 if __name__ == "__main__":
     # --- Parameters for the lookup table we want to load ---
-    M = 7
+    M = 6
     Nmax = 2
     VOLUME_NAME = "qi-results"
 
     # The remote path as stored by your build script
-    remote_json = f"Global_lookuptable/M={M}_Nmax={Nmax}/lookup.json"
+    remote_json = f"Global_lookuptable/M={M}_Nmax={Nmax}/lookup_exact.json"
 
     print(f"Downloading lookup table from Modal volume '{VOLUME_NAME}'...")
     json_file = download_lookup_json_from_volume(VOLUME_NAME, remote_json)
