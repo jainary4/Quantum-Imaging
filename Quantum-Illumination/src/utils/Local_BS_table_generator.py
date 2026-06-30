@@ -1,4 +1,4 @@
-from POVM_interferometric import build_local_BS_table
+from src.POVM.POVM_interferometric import build_local_BS_table
 import modal
 import tempfile
 from pathlib import Path
@@ -6,7 +6,7 @@ import json
 import pickle
 
 VOLUME_NAME = "qi-results"          # your existing volume
-N_MAX_VALUES = [7]     # the N_max values you want now
+N_MAX_VALUES = [8,9,10,11,12,13,14,15]     # the N_max values you want now
 REMOTE_PARENT_DIR = "local_BS_tables"
 
 def main():
