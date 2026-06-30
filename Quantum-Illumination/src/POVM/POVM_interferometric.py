@@ -381,6 +381,7 @@ def compute_probabilities_for_pattern(entries: List[Tuple[int, float]],rho_abs: 
 
 
 
+
 def process_one_block(args: Tuple) -> Tuple[int, Dict[Tuple[int, ...], Tuple[float, float, float]]]:
     """
     Worker function that processes one Nc block.
@@ -415,6 +416,38 @@ def process_one_block(args: Tuple) -> Tuple[int, Dict[Tuple[int, ...], Tuple[flo
         block_table[pattern] = (lam, p0, p1)
 
     return Nc, block_table
+
+
+def process_one_block_sigmas(args: Tuple) -> Tuple[int, Dict[Tuple[int, ...], Tuple[float, float, float]]]:
+    """
+    Worker function for one Nc block using sigma matrices.
+
+    Input args: (M, Nc, local_BS, N_max, sigma_pres, sigma_abs,
+                 basis_list, inner_workers, use_slm, phases)
+    Returns (Nc, lookup_table_for_this_block).
+    """
+    (M, Nc, local_BS, N_max, sigma_pres, sigma_abs,
+     basis_list, inner_workers, use_slm, phases,
+     norm_pres, norm_abs) = args
+
+    # Build amplitude dictionary – parallel or serial
+    if inner_workers > 1:
+        pattern_amps = build_pattern_amplitudes_parallel(M, Nc, local_BS, N_max, num_workers=inner_workers)
+    else:
+        pattern_amps = build_pattern_amplitudes_serial(M, Nc, local_BS, N_max)
+
+    # Compute probabilities and Λ for every output pattern
+    block_table = {}
+    for pattern, entries in pattern_amps.items():
+        lam, p0, p1 = compute_probabilities_from_sigmas(
+            entries, basis_list, sigma_pres, sigma_abs, M, norm_pres, norm_abs,
+            phases=phases if use_slm else None
+        )
+        block_table[pattern] = (lam, p0, p1)
+
+    return Nc, block_table
+
+
 
 
 def build_global_lookup_table(
@@ -470,6 +503,8 @@ def build_global_lookup_table(
     return global_lookup
 
 
+
+
 def convert_lookup_to_json_serializable(lookup: Dict) -> Dict:
     """Convert lookup table to a JSON‑serializable dict.
     Keys: Nc -> str(pattern) -> [lam, p0, p1]"""
@@ -491,10 +526,9 @@ async def download_file(remote_path: str, local_path: str):
 
 
 
-
 if __name__ == "__main__":
     # --- Parameters for the simulation ---
-    M = 7
+    M = 6
     Nmax = 2
     kappa = 0.05      # target reflectivity (used in target‑present generation)
     Nbar = 0.5        # thermal background
@@ -523,6 +557,11 @@ if __name__ == "__main__":
 
         pres_data = np.load(str(pres_local))
         rho_pres = {int(k.split('_')[1]): pres_data[k] for k in pres_data.files}
+        total_trace=0.0 
+        for Nc, block in rho_pres.items():
+            total_trace= total_trace+ np.trace(block).real
+        
+        print(f"total trace of the block representation is : {total_trace}" )
 
         abs_data = np.load(str(abs_local))
         rho_abs = {int(k.split('_')[1]): abs_data[k] for k in abs_data.files}
